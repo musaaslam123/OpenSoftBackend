@@ -1,14 +1,28 @@
-import express from "express";
-import cors from "cors";
-import bodyParser from "body-parser";
-import jwt from "jsonwebtoken";
+const express = require("express");
+const cors = require("cors");
+const bodyParser = require("body-parser");
+const jwt = require("jsonwebtoken");
+const mongoose = require("mongoose");
+const dotenv = require("dotenv").config();
+const User = require("./models/user");
 
 const app = express();
 app.use(cors());
 app.use(bodyParser.json());
 
 // Secret key for JWT (In production, store this securely!)
-const SECRET_KEY = "JWT_SECRET";
+const SECRET_KEY = process.env.SECRET_KEY;
+
+const CONN_STRING = process.env.CONNECTION_STRING
+
+
+mongoose.connect(CONN_STRING).then(() => {
+  console.log("Connected to Database");
+}).catch(error => {
+  console.log("Error connecting to Database", error);
+
+})
+
 
 // In-memory data for demonstration
 let users = [];
@@ -49,36 +63,43 @@ function authenticateToken(req, res, next) {
   });
 }
 
-// ======================= AUTH ROUTES =======================
-
 app.get("/", (req, res) => {
   return res.status(200).json({ message: "Server running" });
 });
 
+// ======================= AUTH ROUTES =======================
+
 // Register
-app.post("/auth/register", (req, res) => {
+app.post("/auth/register", async (req, res) => {
   const { email, password } = req.body;
+  console.log("Here in regster", email, password)
+
   if (!email || !password) {
     return res.status(400).json({ message: "Email and password required" });
   }
 
   // Check if user already exists
-  const existingUser = users.find((u) => u.email === email);
+  const existingUser = await User.findOne({ email });
   if (existingUser) {
     return res.status(400).json({ message: "User already exists" });
   }
 
   // Create user
-  const newUser = { id: Date.now().toString(), email, password };
-  users.push(newUser);
+  const newUser = new User({ email, password });
+  await newUser.save();
+
   return res.status(201).json({ message: "User registered successfully" });
 });
 
 // Login
-app.post("/auth/login", (req, res) => {
+app.post("/auth/login", async (req, res) => {
   const { email, password } = req.body;
-  const user = users.find((u) => u.email === email && u.password === password);
+  console.log("Here ==>", email, password);
+
+  const user = await User.findOne({ email: email, password: password });
   if (!user) {
+    console.log("Invalid credentials");
+
     return res.status(401).json({ message: "Invalid credentials" });
   }
 
