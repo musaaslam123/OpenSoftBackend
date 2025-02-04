@@ -5,6 +5,8 @@ const jwt = require("jsonwebtoken");
 const mongoose = require("mongoose");
 const dotenv = require("dotenv").config();
 const User = require("./models/user");
+const Movies = require("./models/movie");
+const { searchMovies, autocomplete } = require("./fuzzysearch");
 
 const app = express();
 app.use(cors());
@@ -15,40 +17,26 @@ const SECRET_KEY = process.env.SECRET_KEY;
 
 const CONN_STRING = process.env.CONNECTION_STRING
 
+mongoose
+  .connect(CONN_STRING, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+    dbName: 'sample_mflix' // specify the database name here
+  })
+  .then(() => {
+    console.log("Connected to Database - sample_mflix");
+  })
+  .catch((error) => {
+    console.error("Database connection error:", error);
+    process.exit(1); // Exit if unable to connect to database
+  });
 
-mongoose.connect(CONN_STRING).then(() => {
-  console.log("Connected to Database");
-}).catch(error => {
-  console.log("Error connecting to Database", error);
+mongoose.connection.on('connected', async () => {
+  console.log('Current database:', mongoose.connection.db.databaseName);
+  const collections = await mongoose.connection.db.listCollections().toArray();
+  console.log('Available collections:', collections.map(c => c.name));
+});
 
-})
-
-
-// In-memory data for demonstration
-let users = [];
-let movies = [
-  {
-    id: "1",
-    title: "The Action Movie",
-    genre: "Action",
-    description: "High-octane action film.",
-    trailerUrl: "https://www.w3schools.com/html/mov_bbb.mp4",
-  },
-  {
-    id: "2",
-    title: "Romantic Getaway",
-    genre: "Romance",
-    description: "A heartfelt romantic story.",
-    trailerUrl: "https://www.w3schools.com/html/movie.mp4",
-  },
-  {
-    id: "3",
-    title: "Comedy Night",
-    genre: "Comedy",
-    description: "A hilarious comedy special.",
-    trailerUrl: "https://www.w3schools.com/html/mov_bbb.mp4",
-  },
-];
 
 // Utility function to verify token
 function authenticateToken(req, res, next) {
@@ -122,32 +110,40 @@ app.get("/auth/profile", authenticateToken, (req, res) => {
 // ======================= MOVIE ROUTES =======================
 
 // Get all movies
-app.get("/movies", (req, res) => {
-  return res.json(movies);
+app.get("/movies", async (req, res) => {
+  const movie = await Movies.findOne({});
+  return res.json(movie);
 });
 
+// Fuzzy search movies by title
+app.get("/movies/search", searchMovies);
+
+
+
+app.get("/movies/autocomplete", autocomplete);
+
 // Get movie by ID
-app.get("/movies/:id", (req, res) => {
+app.get("/movies/movie/:id", async (req, res) => {
   const { id } = req.params;
-  const movie = movies.find((m) => m.id === id);
+  const movie = await Movies.findById(id);
   if (!movie) {
     return res.status(404).json({ message: "Movie not found" });
   }
   return res.json(movie);
 });
 
-// Search movies (simple partial match on title)
-app.get("/movies/search", (req, res) => {
-  const { q } = req.query;
-  if (!q) return res.json(movies);
-  const results = movies.filter((m) =>
-    m.title.toLowerCase().includes(q.toLowerCase())
-  );
-  return res.json(results);
-});
+// // Search movies (simple partial match on title)
+// app.get("/movies/search", (req, res) => {
+//   const { q } = req.query;
+//   if (!q) return res.json(movies);
+//   const results = movies.filter((m) =>
+//     m.title.toLowerCase().includes(q.toLowerCase())
+//   );
+//   return res.json(results);
+// });
 
 // Get trailer for a movie
-app.get("/movies/:id/trailer", (req, res) => {
+app.get("/movies/movie/:id/trailer", (req, res) => {
   const { id } = req.params;
   const movie = movies.find((m) => m.id === id);
   if (!movie) {
@@ -157,7 +153,7 @@ app.get("/movies/:id/trailer", (req, res) => {
 });
 
 // Get recommendations (simple: same genre, different id)
-app.get("/movies/:id/recommendations", (req, res) => {
+app.get("/movies/movie/:id/recommendations", (req, res) => {
   const { id } = req.params;
   const movie = movies.find((m) => m.id === id);
   if (!movie) {
