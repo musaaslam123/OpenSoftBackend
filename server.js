@@ -125,10 +125,16 @@ app.get("/movies/autocomplete", autocomplete);
 // Get movie by ID
 app.get("/movies/movie/:id", async (req, res) => {
   const { id } = req.params;
+  console.log("Here in movie id", id);
+
   const movie = await Movies.findById(id);
   if (!movie) {
+    console.log("Movie not found");
+
     return res.status(404).json({ message: "Movie not found" });
   }
+  console.log("Movie found", movie);
+
   return res.json(movie);
 });
 
